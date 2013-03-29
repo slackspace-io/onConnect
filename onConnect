@@ -23,7 +23,7 @@ dup2(so.fileno(), stdout.fileno())
 dup2(se.fileno(), stderr.fileno())
 
 
-logging.basicConfig(filename='/var/log/onConnect/onConnect.log',level=logging.DEBUG)
+logging.basicConfig(filename='/var/log/onConnect/onConnect.log',level=logging.WARN)
 config = cp.ConfigParser()
 config.read('/etc/onConnect.conf')
 
@@ -42,10 +42,6 @@ def getMacs():
        macs.append(mac)
   arpFile.close()
   return macs
-
-def openConfig():
-  config = cp.ConfigParser()
-  config.read('/etc/onConnect.conf')
 
 
 def runCmd(cmd):
