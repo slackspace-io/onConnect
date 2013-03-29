@@ -1,0 +1,123 @@
+#!/usr/bin/python2
+
+import re
+import ConfigParser as cp
+import subprocess
+import logging
+import time
+from os import fork, setsid, umask, dup2, getpid
+from sys import stdin, stdout, stderr
+
+if fork(): exit(0)
+umask(0) 
+setsid() 
+if fork(): exit(0)
+
+stdout.flush()
+stderr.flush()
+si = file('/dev/null', 'r')
+so = file('/dev/null', 'a+')
+se = file('/dev/null', 'a+', 0)
+dup2(si.fileno(), stdin.fileno())
+dup2(so.fileno(), stdout.fileno())
+dup2(se.fileno(), stderr.fileno())
+
+
+logging.basicConfig(filename='/var/log/onConnect/onConnect.log',level=logging.DEBUG)
+config = cp.ConfigParser()
+config.read('/etc/onConnect.conf')
+
+def setPid():
+  pidFile="/var/run/onConnect.pid"
+  outfile = open(pidFile, 'w')
+  outfile.write('%i' % getpid())
+  outfile.close()
+
+def getMacs():
+  macs=[]
+  arpFile = open('/proc/net/arp', 'r')
+  for line in arpFile.readlines():
+     mac=line.strip('\n').split()[3]
+     if re.search(r"^[a-fA-F0-9][aceACE02468][:|\-]?([a-fA-F0-9]{2}[:|\-]?){4}[a-fA-F0-9]{2}$", mac):
+       macs.append(mac)
+  arpFile.close()
+  return macs
+
+def openConfig():
+  config = cp.ConfigParser()
+  config.read('/etc/onConnect.conf')
+
+
+def runCmd(cmd):
+    p = subprocess.Popen(cmd, shell=True,
+                         stdin=subprocess.PIPE,
+                         stdout=subprocess.PIPE,
+                         stderr=subprocess.PIPE,
+                         close_fds=False)
+
+def doMac(mac):
+  global curMac
+  things = {"vpn":doVpn, "volume":doVolume}
+  if curMac == mac:
+    logging.info("Network has not changed, nothing to do")
+  else:
+    logging.info("Found %s, checking for configuration" %(mac))
+    logging.info(config.sections())  
+    if mac in config.sections():
+      options=config.options(mac)
+      logging.info("Config found for %s\n%s" %(mac,options))
+      curMac=mac
+      for option in options:
+        try:
+          logging.debug(things[option])
+          things[option]()
+        except:
+          logging.warn("%s unknown config option" % (option))
+    
+
+def doVolume():
+  global curMac
+  vol=config.get(curMac, "volume")
+  logging.debug(vol)
+  cmd="amixer cset iface=MIXER,name='Master Playback Volume' %s%s" % (vol,'%')
+  runCmd(cmd)
+  logging.info("command %s for %s" % (cmd, curMac))
+
+
+def doVpn():
+  global curMac
+  if config.getboolean(curMac,"vpn"):
+    cmd="systemctl start vpn"
+    runCmd(cmd)
+  else:
+    cmd="systemctl stop vpn"
+    runCmd(cmd)
+  logging.info("command %s for %s" % (cmd, curMac))
+
+
+def countMacs(macs):
+  count=0
+  for mac in macs:
+    if mac in config.sections():
+      count +=1
+  logging.info("%s number of mac addresses with matching configuration in current arp table" % (count))
+  return count
+def main():
+  setPid()
+  global curMac
+  curMac = "None"
+  while 1:
+    macs=getMacs()
+    logging.debug("Macs found in arp table\n %s" % (macs))
+    found=countMacs(macs)
+    if found==1:
+      for mac in macs:
+        doMac(mac)
+    elif found==0:
+      logging.info("No Configuration Found, Applying Default Configuration")
+      doMac('Default')
+    time.sleep(15)
+
+if __name__ == "__main__":
+  main()
+
