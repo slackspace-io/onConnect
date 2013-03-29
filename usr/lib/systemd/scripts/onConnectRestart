@@ -1,0 +1,4 @@
+#!/bin/bash
+/usr/lib/systemd/scripts/onConnectStop
+sleep 3
+/usr/lib/systemd/scripts/onConnectStart

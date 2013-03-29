@@ -1,0 +1,12 @@
+[Unit]
+Description=onConnect
+
+[Service]
+Type=forking
+PIDFILE=/var/run/onConnect.pid
+ExecStart=/usr/lib/systemd/scripts/onConnectStart
+ExecReload=/usr/lib/systemd/scripts/onConnectRestart
+ExecStop=/usr/lib/systemd/scripts/onConnectStop
+
+[Install]
+WantedBy=multi-user.target
