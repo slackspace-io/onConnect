@@ -65,8 +65,13 @@ def doMac(mac):
       curMac=mac
       for option in options:
         try:
-          logging.debug(things[option])
-          things[option]()
+          if option.find('custom') >= 0:
+            cmd=config.get(mac, option)
+	    logging.debug("Found custom cmd %s" %(cmd))
+            runCmd(cmd)
+          else:
+            logging.debug(things[option])
+            things[option]()
         except:
           logging.warn("%s unknown config option" % (option))
     
