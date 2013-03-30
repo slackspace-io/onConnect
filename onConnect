@@ -53,7 +53,7 @@ def runCmd(cmd):
 
 def doMac(mac):
   global curMac
-  things = {"vpn":doVpn, "volume":doVolume}
+  things = {"volume":doVolume}
   if curMac == mac:
     logging.info("Network has not changed, nothing to do")
   else:
@@ -84,16 +84,6 @@ def doVolume():
   runCmd(cmd)
   logging.info("command %s for %s" % (cmd, curMac))
 
-
-def doVpn():
-  global curMac
-  if config.getboolean(curMac,"vpn"):
-    cmd="systemctl start vpn"
-    runCmd(cmd)
-  else:
-    cmd="systemctl stop vpn"
-    runCmd(cmd)
-  logging.info("command %s for %s" % (cmd, curMac))
 
 
 def countMacs(macs):
