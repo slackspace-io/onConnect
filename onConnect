@@ -1,4 +1,5 @@
 #!/usr/bin/python2
+version=2.0
 
 import re
 import ConfigParser as cp
@@ -23,9 +24,16 @@ dup2(so.fileno(), stdout.fileno())
 dup2(se.fileno(), stderr.fileno())
 
 
-logging.basicConfig(filename='/var/log/onConnect/onConnect.log',level=logging.WARN)
-config = cp.ConfigParser()
-config.read('/etc/onConnect.conf')
+
+logging.basicConfig(filename='/var/log/onConnect/onConnect.log', level=logging.WARN)
+
+
+def setLogging(config):
+  try:
+    logL="logging.%s" % (config.get("General", "Logging"))
+  except:
+    logL="logging.WARN"
+  logging.basicConfig(filename='/var/log/onConnect/onConnect.log', level="%s" % (logL))
 
 def setPid():
   pidFile="/var/run/onConnect.pid"
@@ -51,7 +59,7 @@ def runCmd(cmd):
                          stderr=subprocess.PIPE,
                          close_fds=False)
 
-def doMac(mac):
+def doMac(mac, config):
   global curMac
   things = {"volume":doVolume}
   if curMac == mac:
@@ -75,6 +83,54 @@ def doMac(mac):
         except:
           logging.warn("%s unknown config option" % (option))
     
+def doFile(fileNick):
+  global states
+  logging.debug("Loading Configuration for %s" % (fileNick))
+  fileL=config.get(fileNick, "file")
+  eState=config.get(fileNick, "value")
+  try:
+    fileL=config.get(fileNick, "file")
+    eState=config.get(fileNick, "value")
+  except:
+    logging.warn("Missing configuration for %s" % (fileNick))
+    return False
+  try:
+    sFile = open(fileL, 'r')
+  except:
+    logging.WARN("Unable to open file %s" % (fileL))
+  state=sFile.readline().strip('\n')
+  try:
+    logging.debug("Looking up prior state for %s" % (fileNick))
+    pState = states[fileNick]
+    logging.debug("Prior state for %s is %s" % (fileNick, pState))
+  except:
+    logging.debug("No prior state found for %s" % (fileNick))
+    pState = "bLaNk3"
+  try:
+    cmdTrue=config.get(fileNick, "actionTrue")
+  except:
+    cmdTrue=False
+    logging.info("No actionFalse command found for %s" % (fileNick))
+  try:
+    cmdFalse=config.get(fileNick, "actionFalse")    
+  except:
+    cmdFalse=False
+    logging.info("No actionFalse command found for %s" % (fileNick))
+  if pState != state:
+    logging.debug("State changed for %s" % (fileNick))
+    if eState == state:
+      if cmdTrue:
+        logging.debug("New state matches configuration %s, running actionTrue Cmd %s" % (fileNick, cmdTrue))
+        runCmd(cmdTrue)
+    elif eState != state:
+      if cmdFalse:
+        logging.debug("New state matches configuration %s, running actionFalse Cmd %s" % (fileNick, cmdFalse))
+        runCmd(cmdFalse)
+  else:
+    logging.debug("%s state did not change" %(fileNick))
+  states[fileNick]=state
+  sFile.close()
+
 
 def doVolume():
   global curMac
@@ -85,29 +141,62 @@ def doVolume():
   logging.info("command %s for %s" % (cmd, curMac))
 
 
-
-def countMacs(macs):
+def countMacs(macs, config):
   count=0
   for mac in macs:
     if mac in config.sections():
       count +=1
   logging.info("%s number of mac addresses with matching configuration in current arp table" % (count))
   return count
+
+
+def macConfig(config):
+  logging.debug("Starting Mac Config")
+  global curMac
+#  curMac = "None"
+  macs=getMacs()
+  logging.debug("Macs found in arp table\n %s" % (macs))
+  found=countMacs(macs,config)
+  if found==1:
+    for mac in macs:
+      logging.debug("Running doMac with %s" % (mac))
+      doMac(mac, config)
+  elif found==0:
+    logging.info("No Mac Configuration Found")
+
+def loadConfig():
+  global confF
+  config = cp.ConfigParser()
+  config.read(confF)
+  return config
+
+def fileConfig(config):
+  global confF
+  logging.debug("Starting File Configs")
+  for section in config.sections():
+    if section.startswith('File'):
+      logging.debug("Found %s" % (section))
+      doFile(section)
+
+  
+
 def main():
   setPid()
+  global states
+  states={}
+  global config
+  global confF
+  confF="/etc/onConnect.conf"
   global curMac
   curMac = "None"
+  global curPower
+  curPower = "None"
   while 1:
-    macs=getMacs()
-    logging.debug("Macs found in arp table\n %s" % (macs))
-    found=countMacs(macs)
-    if found==1:
-      for mac in macs:
-        doMac(mac)
-    elif found==0:
-      logging.info("No Configuration Found, Applying Default Configuration")
-      doMac('Default')
-    time.sleep(15)
+    config=loadConfig()
+    logging.debug("Heartbeat")
+    macConfig(config)
+    fileConfig(config)
+    time.sleep(13)
 
 if __name__ == "__main__":
   main()
