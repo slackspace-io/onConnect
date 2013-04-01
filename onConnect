@@ -79,7 +79,7 @@ def doMac(mac, config):
             runCmd(cmd)
           else:
             logging.debug(things[option])
-            things[option]()
+            things[option](config)
         except:
           logging.warn("%s unknown config option" % (option))
     
@@ -132,7 +132,7 @@ def doFile(fileNick):
   sFile.close()
 
 
-def doVolume():
+def doVolume(config):
   global curMac
   vol=config.get(curMac, "volume")
   logging.debug(vol)
@@ -162,6 +162,7 @@ def macConfig(config):
       logging.debug("Running doMac with %s" % (mac))
       doMac(mac, config)
   elif found==0:
+    curMac="none"
     logging.info("No Mac Configuration Found")
 
 def loadConfig():
